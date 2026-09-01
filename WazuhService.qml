@@ -104,16 +104,13 @@ Item {
     root.openUrl(root.dashboardUrl)
   }
 
-  // El CLI y el detector se instalan juntos, asi que el agente vive en el mismo
-  // directorio que el detector que ya resolvimos. Sin detector resuelto no hay
-  // a quien llamar, y lanzar por PATH seria volver al problema original.
   function callAgent() {
-    if (root.resolvedHelper === "") {
-      console.warn("omarchy-sec: no hay detector resuelto; no se llama al agente")
+    if (!root.agentValidated) {
+      console.warn("omarchy-sec:", root.agentHelper,
+                   "no esta validado; no se lanza el agente")
       return
     }
-    var dir = root.resolvedHelper.substring(0, root.resolvedHelper.lastIndexOf("/"))
-    Quickshell.execDetached([dir + "/omarchy-sec", "agent"])
+    Quickshell.execDetached([root.agentHelper, "agent"])
   }
 
   // ── Resolucion del helper ────────────────────────────────────────────────
@@ -132,36 +129,32 @@ Item {
   // leerlos para probar existencia es barato. Si algun dia el helper fuera un
   // binario grande, esto tendria que ser un stat y no una lectura.
   // ── Validacion del helper ────────────────────────────────────────────────
-  // No se lee el archivo para saber si existe: leer entero un candidato
-  // arbitrario es, en si mismo, el problema. Se le pregunta al sistema por sus
-  // propiedades — regular, no symlink, ejecutable, acotado — sin tocar el
-  // contenido. `find` no sigue symlinks, asi que -type f ya los descarta.
-  readonly property string systemHelper: "/usr/bin/omarchy-sec-detect"
-  readonly property string userHelper: root.homeDir === "" ? ""
-                                     : root.homeDir + "/.local/bin/omarchy-sec-detect"
-  readonly property var candidates: root.userHelper === ""
-                                  ? [root.systemHelper]
-                                  : [root.systemHelper, root.userHelper]
+  // Solo /usr/bin. La ruta en ~/.local/bin se cayo a proposito: validar y
+  // despues ejecutar por nombre de archivo es check-then-execute, y un archivo
+  // que el propio usuario puede reescribir entre las dos cosas no es una
+  // identidad en la que se pueda confiar. /usr/bin/... solo lo cambia root, y
+  // root tambien puede reemplazar este widget: queda fuera del modelo.
+  //
+  // Consecuencia asumida: una instalacion desde el checkout (~/.local/bin) ya
+  // no alimenta al widget. Queda en gris hasta que se instale el paquete. Es la
+  // respuesta correcta para un indicador de seguridad — antes que mostrar un
+  // estado que salio de un binario que cualquiera pudo cambiar.
+  readonly property string detectHelper: "/usr/bin/omarchy-sec-detect"
+  readonly property string agentHelper: "/usr/bin/omarchy-sec"
 
-  property int candidateIndex: 0
-
-  function validateCandidate() {
-    if (root.candidateIndex >= root.candidates.length) {
-      console.warn("omarchy-sec: ningun candidato pasa la validacion; estado desconocido")
-      root.markUnknown()
-      return
-    }
-    validateProcess.running = false
-    validateProcess.command = [
-      "/usr/bin/find", root.candidates[root.candidateIndex],
-      "-maxdepth", "0",
-      "-type", "f", "!", "-type", "l",
-      "-perm", "-u+x",
-      "-size", "-1048577c",   // en bytes: -1M redondea a unidades de 1 MiB y no matchea nada
-      "-print"
-    ]
-    validateProcess.running = true
+  // regular · no symlink · de root · no escribible por grupo ni otros ·
+  // ejecutable · acotado. Sin leer una sola linea del contenido.
+  function validationArgs(path) {
+    return ["/usr/bin/find", path,
+            "-maxdepth", "0",
+            "-type", "f", "!", "-type", "l",
+            "-user", "root", "!", "-perm", "/022",
+            "-perm", "-u+x",
+            "-size", "-1048577c",
+            "-print"]
   }
+
+  property bool agentValidated: false
 
   Process {
     id: validateProcess
@@ -169,17 +162,39 @@ Item {
     command: []
     stdout: StdioCollector { id: validateOut; waitForEnd: true }
     onExited: {
-      var hit = String(validateOut.text || "").trim()
-      if (hit === root.candidates[root.candidateIndex]) {
-        root.resolvedHelper = hit
-        // En un indicador de seguridad la procedencia del dato es parte del dato.
-        console.warn("omarchy-sec: detector validado en", hit)
+      if (String(validateOut.text || "").trim() === root.detectHelper) {
+        root.resolvedHelper = root.detectHelper
+        console.warn("omarchy-sec: detector validado en", root.detectHelper)
         root.refresh()
-        return
+      } else {
+        console.warn("omarchy-sec:", root.detectHelper,
+                     "no pasa la validacion (regular, de root, no escribible por otros);",
+                     "estado desconocido")
+        root.markUnknown()
       }
-      root.candidateIndex += 1
-      root.validateCandidate()
+      // El binario del agente se valida aparte: es otro ejecutable y heredar la
+      // confianza de su hermano de directorio no lo convierte en confiable.
+      validateAgent.command = root.validationArgs(root.agentHelper)
+      validateAgent.running = true
     }
+  }
+
+  Process {
+    id: validateAgent
+    running: false
+    command: []
+    stdout: StdioCollector { id: agentOut; waitForEnd: true }
+    onExited: {
+      root.agentValidated = (String(agentOut.text || "").trim() === root.agentHelper)
+      if (!root.agentValidated)
+        console.warn("omarchy-sec:", root.agentHelper,
+                     "no pasa la validacion; 'Call Agent' queda deshabilitado")
+    }
+  }
+
+  function validateCandidate() {
+    validateProcess.command = root.validationArgs(root.detectHelper)
+    validateProcess.running = true
   }
 
   Component.onCompleted: root.validateCandidate()
@@ -193,19 +208,25 @@ Item {
     if (detectProcess.running) return
     root.collected = ""
     root.overflowed = false
-    // Relay acotado en bytes, del lado del productor:
-    //   setsid   — el helper lidera su propia sesion, asi que matar el grupo
-    //              no puede alcanzar a la barra
-    //   timeout  — plazo a nivel del sistema operativo, no una promesa de QML
-    //   head -c  — corta a los 64 KiB y el helper muere de SIGPIPE, asi que el
-    //              tope se aplica mientras escribe y no despues de bufferizar
-    //   pipefail — sin esto el exit code seria el de head y perderiamos el fallo
-    // La ruta ya paso la validacion y es absoluta; igual va entre comillas
-    // simples con escape, porque una ruta sin citar en un -c es exactamente el
-    // patron que hay que no repetir.
-    var quoted = "'" + String(root.resolvedHelper).replace(/'/g, "'\\''") + "'"
+    // El scope de systemd reemplaza a setsid + kill -- -PID. Ese esquema estaba
+    // mal: setsid FORKEA, asi que el PID que observabamos era el de setsid y no
+    // el del lider de sesion, y matar ese "grupo" apuntaba a otra cosa — o, con
+    // reutilizacion de PID, a un tercero. Un scope se direcciona por un nombre
+    // que elegimos nosotros, posee el arbol entero de descendientes y se corta
+    // de forma sincronica. No hay PID que observar ni carrera que perder.
+    //
+    //   timeout  — plazo del sistema operativo, no una promesa de un Timer
+    //   head -c  — corta a los 64 KiB y el productor muere de SIGPIPE, asi que
+    //              el tope se aplica mientras escribe y no despues
+    //   pipefail — sin esto el exit code seria el de head y un fallo del helper
+    //              se leeria como exito
+    root.scopeUnit = "omarchy-sec-detect-" + Date.now() + "-" +
+                     Math.floor(Math.random() * 100000)
+    var quoted = "'" + String(root.resolvedHelper).replace(/'/g, "'\''") + "'"
     detectProcess.command = [
-      "/usr/bin/setsid", "-w", "/bin/bash", "-c",
+      "/usr/bin/systemd-run", "--user", "--scope", "--collect", "--quiet",
+      "--unit", root.scopeUnit,
+      "/bin/bash", "-c",
       "set -o pipefail; /usr/bin/timeout -k 2 " +
       Math.ceil(root.deadlineMs / 1000) + " " + quoted +
       " | /usr/bin/head -c " + root.maxStdoutBytes
@@ -214,20 +235,21 @@ Item {
     deadline.restart()
   }
 
-  // Bajar `running` termina al hijo directo y nada mas: un helper que forkea
-  // deja descendientes vivos con el stdout heredado abierto. setsid lo puso en
-  // su propia sesion, asi que su PGID es su PID y se puede matar el grupo
-  // entero sin riesgo de alcanzar a la barra — el grupo es suyo, no nuestro.
-  function killDetectGroup() {
-    var pid = detectProcess.processId
-    if (pid === undefined || pid === null || pid <= 1) return
-    Quickshell.execDetached(["/usr/bin/kill", "-KILL", "--", "-" + pid])
+  property string scopeUnit: ""
+
+  // Se corta la unidad por su nombre, no un grupo deducido de un PID: el scope
+  // posee el cgroup, asi que systemd mata todo el arbol de descendientes de una
+  // y sin depender de que ningun PID siga siendo el que creiamos.
+  function killDetectScope() {
+    if (root.scopeUnit === "") return
+    Quickshell.execDetached(["/usr/bin/systemctl", "--user", "stop",
+                             root.scopeUnit + ".scope"])
   }
 
   function abortDetect(reason) {
     console.warn("omarchy-sec:", reason)
     deadline.stop()
-    root.killDetectGroup()
+    root.killDetectScope()
     detectProcess.running = false
     root.markUnknown()
   }
