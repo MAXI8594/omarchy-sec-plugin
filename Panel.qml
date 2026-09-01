@@ -92,6 +92,7 @@ Panel {
 
         // Subtítulo de estado general
         Text {
+          textFormat: Text.PlainText
           anchors.horizontalCenter: parent.horizontalCenter
           text: root.selectedSensor === "" 
                 ? (service ? service.statusText : "Omarchy Sec")
@@ -119,6 +120,8 @@ Panel {
             spacing: Style.space(6)
 
             Text {
+
+              textFormat: Text.PlainText
               text: "Selecciona un Sensor para detalles:"
               font.family: root.fontFamily
               font.pixelSize: Style.space(11)
@@ -154,6 +157,7 @@ Panel {
                   anchors.verticalCenter: parent.verticalCenter
                 }
                 Text {
+                  textFormat: Text.PlainText
                   text: "Wazuh Open XDR/EDR"
                   font.family: root.fontFamily
                   font.pixelSize: Style.space(10)
@@ -161,6 +165,7 @@ Panel {
                   color: (sensors.wazuh && sensors.wazuh.agent === "active") ? root.foreground : root.dim
                 }
                 Text {
+                  textFormat: Text.PlainText
                   text: (sensors.wazuh && sensors.wazuh.agent === "active") ? "• Activo (:1514)" : "• Inactivo"
                   font.family: root.fontFamily
                   font.pixelSize: Style.space(9)
@@ -197,6 +202,7 @@ Panel {
                   anchors.verticalCenter: parent.verticalCenter
                 }
                 Text {
+                  textFormat: Text.PlainText
                   text: "CrowdStrike Falcon Sensor"
                   font.family: root.fontFamily
                   font.pixelSize: Style.space(10)
@@ -204,6 +210,7 @@ Panel {
                   color: (sensors.crowdstrike && sensors.crowdstrike.status === "active") ? root.foreground : root.dim
                 }
                 Text {
+                  textFormat: Text.PlainText
                   text: (sensors.crowdstrike && sensors.crowdstrike.status === "active") ? "• Activo" : "• No detectado"
                   font.family: root.fontFamily
                   font.pixelSize: Style.space(9)
@@ -240,6 +247,7 @@ Panel {
                   anchors.verticalCenter: parent.verticalCenter
                 }
                 Text {
+                  textFormat: Text.PlainText
                   text: "Palo Alto Cortex XDR"
                   font.family: root.fontFamily
                   font.pixelSize: Style.space(10)
@@ -247,6 +255,7 @@ Panel {
                   color: (sensors.cortex && sensors.cortex.status === "active") ? root.foreground : root.dim
                 }
                 Text {
+                  textFormat: Text.PlainText
                   text: (sensors.cortex && sensors.cortex.status === "active") ? "• Activo" : "• No detectado"
                   font.family: root.fontFamily
                   font.pixelSize: Style.space(9)
@@ -283,6 +292,7 @@ Panel {
                   anchors.verticalCenter: parent.verticalCenter
                 }
                 Text {
+                  textFormat: Text.PlainText
                   text: "Microsoft Defender (MDE)"
                   font.family: root.fontFamily
                   font.pixelSize: Style.space(10)
@@ -290,6 +300,7 @@ Panel {
                   color: (sensors.defender && sensors.defender.status === "active") ? root.foreground : root.dim
                 }
                 Text {
+                  textFormat: Text.PlainText
                   text: (sensors.defender && sensors.defender.status === "active") ? "• Activo" : "• No detectado"
                   font.family: root.fontFamily
                   font.pixelSize: Style.space(9)
@@ -331,8 +342,9 @@ Panel {
           Row {
             anchors.centerIn: parent
             spacing: Style.space(8)
-            Text { text: "󰖟"; font.family: root.fontFamily; font.pixelSize: Style.space(13); color: root.statusColor; anchors.verticalCenter: parent.verticalCenter }
+            Text { textFormat: Text.PlainText; text: "󰖟"; font.family: root.fontFamily; font.pixelSize: Style.space(13); color: root.statusColor; anchors.verticalCenter: parent.verticalCenter }
             Text {
+              textFormat: Text.PlainText
               text: {
                 if (root.selectedSensor === "crowdstrike") return "Abrir Falcon Console (Cloud)"
                 if (root.selectedSensor === "cortex") return "Abrir Cortex XDR Hub"
@@ -372,8 +384,8 @@ Panel {
             Row {
               anchors.centerIn: parent
               spacing: Style.space(4)
-              Text { text: ""; font.family: root.fontFamily; font.pixelSize: Style.space(10); color: root.foreground }
-              Text { text: "Refrescar"; font.family: root.fontFamily; font.pixelSize: Style.space(10); color: root.foreground }
+              Text { textFormat: Text.PlainText; text: ""; font.family: root.fontFamily; font.pixelSize: Style.space(10); color: root.foreground }
+              Text { textFormat: Text.PlainText; text: "Refrescar"; font.family: root.fontFamily; font.pixelSize: Style.space(10); color: root.foreground }
             }
           }
 
@@ -399,8 +411,8 @@ Panel {
             Row {
               anchors.centerIn: parent
               spacing: Style.space(4)
-              Text { text: "🤖"; font.family: root.fontFamily; font.pixelSize: Style.space(10); color: root.foreground }
-              Text { text: "Call Agent"; font.family: root.fontFamily; font.pixelSize: Style.space(10); font.bold: true; color: root.foreground }
+              Text { textFormat: Text.PlainText; text: "🤖"; font.family: root.fontFamily; font.pixelSize: Style.space(10); color: root.foreground }
+              Text { textFormat: Text.PlainText; text: "Call Agent"; font.family: root.fontFamily; font.pixelSize: Style.space(10); font.bold: true; color: root.foreground }
             }
           }
         }
