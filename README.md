@@ -73,3 +73,10 @@ Configurable from the widget's settings in the Omarchy shell:
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Author
+
+Maximiliano Olivera — [GitHub](https://github.com/MAXI8594) · [LinkedIn](https://www.linkedin.com/in/maximiliano-daniel-olivera/) · <maxioliverait@gmail.com>
+
+The `omarchy-sec` CLI this widget depends on lives at
+<https://github.com/MAXI8594/omarchy-sec>.
