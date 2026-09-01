@@ -193,9 +193,23 @@ Item {
     if (detectProcess.running) return
     root.collected = ""
     root.overflowed = false
-    // setsid pone al helper en su propia sesion, asi que cortarlo no puede
-    // alcanzar a la barra, y -w propaga el exit code.
-    detectProcess.command = ["/usr/bin/setsid", "-w", root.resolvedHelper]
+    // Relay acotado en bytes, del lado del productor:
+    //   setsid   — el helper lidera su propia sesion, asi que matar el grupo
+    //              no puede alcanzar a la barra
+    //   timeout  — plazo a nivel del sistema operativo, no una promesa de QML
+    //   head -c  — corta a los 64 KiB y el helper muere de SIGPIPE, asi que el
+    //              tope se aplica mientras escribe y no despues de bufferizar
+    //   pipefail — sin esto el exit code seria el de head y perderiamos el fallo
+    // La ruta ya paso la validacion y es absoluta; igual va entre comillas
+    // simples con escape, porque una ruta sin citar en un -c es exactamente el
+    // patron que hay que no repetir.
+    var quoted = "'" + String(root.resolvedHelper).replace(/'/g, "'\\''") + "'"
+    detectProcess.command = [
+      "/usr/bin/setsid", "-w", "/bin/bash", "-c",
+      "set -o pipefail; /usr/bin/timeout -k 2 " +
+      Math.ceil(root.deadlineMs / 1000) + " " + quoted +
+      " | /usr/bin/head -c " + root.maxStdoutBytes
+    ]
     detectProcess.running = true
     deadline.restart()
   }
@@ -264,7 +278,16 @@ Item {
       }
     }
 
-    root.isProtected = (data.status === "protected")
+    // Solo las transiciones, no cada sondeo: que quede rastro de cuando este
+    // endpoint dejo de estar protegido es justamente el punto del widget.
+    var nowProtected = (data.status === "protected")
+    if (nowProtected !== root.isProtected || !root.detectorAvailable) {
+      console.warn("omarchy-sec: estado ->",
+                   nowProtected ? "protegido" : "desprotegido",
+                   "· sensores activos:", Math.floor(Number(data.activeCount) || 0))
+    }
+
+    root.isProtected = nowProtected
     root.primarySensor = root.cleanString(data.primary, "Omarchy Sec")
     root.primaryType = type
     root.activeSensorCount = Math.floor(count)
