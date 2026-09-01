@@ -61,7 +61,7 @@ Configurable from the widget's settings in the Omarchy shell:
 | Key | Default | Notes |
 | :--- | :--- | :--- |
 | `dashboardUrl` | `https://localhost:9001` | Opened on middle-click and from the panel |
-| `refreshIntervalSec` | `30` | 5–300. Each poll spawns the detector, which shells out to `systemctl` and `docker` — keep it coarse |
+| `refreshIntervalSec` | `30` | 5–300. Each poll spawns the detector process, which queries service and container state — measurably not free, so keep it coarse |
 | `enableNotifications` | `true` | Desktop notifications for new alerts |
 
 ## Usage
