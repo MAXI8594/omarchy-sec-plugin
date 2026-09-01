@@ -131,60 +131,91 @@ Item {
   // ponytail: los dos candidatos son scripts de bash de unos pocos KB, asi que
   // leerlos para probar existencia es barato. Si algun dia el helper fuera un
   // binario grande, esto tendria que ser un stat y no una lectura.
-  // Una sonda por candidato, cada una se dispara una sola vez. Nada de mutar un
-  // path y esperar que FileView recargue: eso no reintentaba, y una sonda que
-  // falla en silencio deja al widget en gris para siempre.
-  //
-  // ponytail: dos candidatos fijos alcanzan. Si algun dia hay mas rutas de
-  // instalacion, esto pide un Repeater sobre la lista, no una tercera copia.
-  property bool systemProbeDone: false
-  property bool userProbeDone: false
-  property bool systemHelperExists: false
-  property bool userHelperExists: false
-
+  // ── Validacion del helper ────────────────────────────────────────────────
+  // No se lee el archivo para saber si existe: leer entero un candidato
+  // arbitrario es, en si mismo, el problema. Se le pregunta al sistema por sus
+  // propiedades — regular, no symlink, ejecutable, acotado — sin tocar el
+  // contenido. `find` no sigue symlinks, asi que -type f ya los descarta.
   readonly property string systemHelper: "/usr/bin/omarchy-sec-detect"
   readonly property string userHelper: root.homeDir === "" ? ""
                                      : root.homeDir + "/.local/bin/omarchy-sec-detect"
+  readonly property var candidates: root.userHelper === ""
+                                  ? [root.systemHelper]
+                                  : [root.systemHelper, root.userHelper]
 
-  // /usr/bin gana sobre ~/.local/bin: el paquete del sistema es el de confianza,
-  // y un directorio escribible por el usuario no puede adelantarsele.
-  function settleDetector() {
-    if (!root.systemProbeDone) return
-    if (root.userHelper !== "" && !root.userProbeDone) return
+  property int candidateIndex: 0
 
-    if (root.systemHelperExists)      root.resolvedHelper = root.systemHelper
-    else if (root.userHelperExists)   root.resolvedHelper = root.userHelper
-    else {
+  function validateCandidate() {
+    if (root.candidateIndex >= root.candidates.length) {
+      console.warn("omarchy-sec: ningun candidato pasa la validacion; estado desconocido")
       root.markUnknown()
       return
     }
-    console.warn("omarchy-sec: detector resuelto en", root.resolvedHelper)
-    root.refresh()
+    validateProcess.running = false
+    validateProcess.command = [
+      "/usr/bin/find", root.candidates[root.candidateIndex],
+      "-maxdepth", "0",
+      "-type", "f", "!", "-type", "l",
+      "-perm", "-u+x",
+      "-size", "-1048577c",   // en bytes: -1M redondea a unidades de 1 MiB y no matchea nada
+      "-print"
+    ]
+    validateProcess.running = true
   }
 
-  FileView {
-    path: root.systemHelper
-    preload: true
-    printErrors: false
-    onLoaded:     { root.systemHelperExists = true;  root.systemProbeDone = true; root.settleDetector() }
-    onLoadFailed: { root.systemHelperExists = false; root.systemProbeDone = true; root.settleDetector() }
+  Process {
+    id: validateProcess
+    running: false
+    command: []
+    stdout: StdioCollector { id: validateOut; waitForEnd: true }
+    onExited: {
+      var hit = String(validateOut.text || "").trim()
+      if (hit === root.candidates[root.candidateIndex]) {
+        root.resolvedHelper = hit
+        // En un indicador de seguridad la procedencia del dato es parte del dato.
+        console.warn("omarchy-sec: detector validado en", hit)
+        root.refresh()
+        return
+      }
+      root.candidateIndex += 1
+      root.validateCandidate()
+    }
   }
 
-  FileView {
-    path: root.userHelper
-    preload: true
-    printErrors: false
-    onLoaded:     { root.userHelperExists = true;  root.userProbeDone = true; root.settleDetector() }
-    onLoadFailed: { root.userHelperExists = false; root.userProbeDone = true; root.settleDetector() }
-  }
+  Component.onCompleted: root.validateCandidate()
+
+  property string collected: ""
+  property bool overflowed: false
 
   function refresh() {
-    // Sin ruta resuelta no se lanza nada: las sondas llaman de vuelta.
+    // Sin ruta validada no se lanza nada: validateCandidate llama de vuelta.
     if (root.resolvedHelper === "") return
     if (detectProcess.running) return
-    detectProcess.command = [root.resolvedHelper]
+    root.collected = ""
+    root.overflowed = false
+    // setsid pone al helper en su propia sesion, asi que cortarlo no puede
+    // alcanzar a la barra, y -w propaga el exit code.
+    detectProcess.command = ["/usr/bin/setsid", "-w", root.resolvedHelper]
     detectProcess.running = true
     deadline.restart()
+  }
+
+  // Bajar `running` termina al hijo directo y nada mas: un helper que forkea
+  // deja descendientes vivos con el stdout heredado abierto. setsid lo puso en
+  // su propia sesion, asi que su PGID es su PID y se puede matar el grupo
+  // entero sin riesgo de alcanzar a la barra — el grupo es suyo, no nuestro.
+  function killDetectGroup() {
+    var pid = detectProcess.processId
+    if (pid === undefined || pid === null || pid <= 1) return
+    Quickshell.execDetached(["/usr/bin/kill", "-KILL", "--", "-" + pid])
+  }
+
+  function abortDetect(reason) {
+    console.warn("omarchy-sec:", reason)
+    deadline.stop()
+    root.killDetectGroup()
+    detectProcess.running = false
+    root.markUnknown()
   }
 
   function markUnknown() {
@@ -246,11 +277,28 @@ Item {
     id: detectProcess
     running: false
     command: []
-    stdout: StdioCollector { id: detectStdout; waitForEnd: true }
+    // SplitParser entrega por lineas en vez de retener toda la salida hasta el
+    // final, asi que el presupuesto se aplica mientras el helper escribe y no
+    // despues. StdioCollector no expone ningun tope: el chequeo de tamano
+    // llegaba cuando la salida entera ya estaba en memoria.
+    stdout: SplitParser {
+      splitMarker: "\n"
+      onRead: function(data) {
+        if (root.overflowed) return
+        if (root.collected.length + data.length > root.maxStdoutBytes) {
+          root.overflowed = true
+          root.abortDetect("el detector supero el presupuesto de " +
+                           root.maxStdoutBytes + " bytes; se corta")
+          return
+        }
+        root.collected += data + "\n"
+      }
+    }
 
     onExited: function(exitCode) {
       deadline.stop()
-      var raw = String(detectStdout.text || "")
+      if (root.overflowed) return
+      var raw = root.collected
 
       // Sin detector no sabemos nada. Reportar "desprotegido" seria una falsa
       // alarma en un widget de seguridad: se marca como desconocido.
@@ -259,14 +307,6 @@ Item {
         return
       }
 
-      // Un helper de confianza que escupe 10 MB sigue colgando la barra si lo
-      // parseamos. El tope se aplica antes del JSON.parse, no despues.
-      if (raw.length > root.maxStdoutBytes) {
-        console.warn("omarchy-sec: el detector devolvio", raw.length,
-                     "bytes, por encima del tope de", root.maxStdoutBytes)
-        root.markUnknown()
-        return
-      }
 
       if (!root.applyDetect(raw.trim())) {
         root.markUnknown()
@@ -286,10 +326,8 @@ Item {
     repeat: false
     onTriggered: {
       if (!detectProcess.running) return
-      console.warn("omarchy-sec: el detector no respondio en",
-                   root.deadlineMs, "ms; se corta")
-      detectProcess.running = false
-      root.markUnknown()
+      root.abortDetect("el detector no respondio en " + root.deadlineMs +
+                       " ms; se corta el grupo de procesos")
     }
   }
 
