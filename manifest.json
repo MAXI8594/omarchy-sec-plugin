@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.maxi8594.omarchy-sec",
+  "name": "Omarchy Sec",
+  "version": "1.0.0",
+  "author": "Maximiliano Olivera",
+  "license": "MIT",
+  "description": "Suite universal de seguridad y telemetría EDR/XDR (Wazuh, CrowdStrike, Cortex, Defender, eBPF) con respuesta autónoma a incidentes con IA.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Omarchy Sec",
+    "description": "Estado de protección de seguridad EDR y alertas activas.",
+    "category": "Security",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "dashboardUrl": "https://localhost:9001",
+      "refreshIntervalSec": 30,
+      "enableNotifications": true
+    },
+    "schema": [
+      {
+        "key": "dashboardUrl",
+        "type": "string",
+        "label": "URL del SOC Dashboard",
+        "defaultValue": "https://localhost:9001"
+      },
+      {
+        "key": "refreshIntervalSec",
+        "type": "integer",
+        "label": "Intervalo de refresco (s)",
+        "min": 5,
+        "max": 300,
+        "step": 5,
+        "defaultValue": 30
+      },
+      {
+        "key": "enableNotifications",
+        "type": "boolean",
+        "label": "Notificaciones de escritorio",
+        "defaultValue": true
+      }
+    ]
+  }
+}
