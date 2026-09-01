@@ -20,8 +20,7 @@
     "defaultSection": "right",
     "defaults": {
       "dashboardUrl": "https://localhost:9001",
-      "refreshIntervalSec": 30,
-      "enableNotifications": true
+      "refreshIntervalSec": 30
     },
     "schema": [
       {
@@ -38,12 +37,6 @@
         "max": 300,
         "step": 5,
         "defaultValue": 30
-      },
-      {
-        "key": "enableNotifications",
-        "type": "boolean",
-        "label": "Notificaciones de escritorio",
-        "defaultValue": true
       }
     ]
   }

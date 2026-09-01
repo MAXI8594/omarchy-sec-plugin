@@ -15,11 +15,9 @@ Item {
   property string primaryType: "none"
   property int activeSensorCount: 0
   property var sensorsData: ({})
-  property string lastCheck: ""
 
   readonly property string dashboardUrl: String(setting("dashboardUrl", "https://localhost:9001"))
   readonly property int refreshIntervalSec: intSetting("refreshIntervalSec", 30, 5, 300)
-  readonly property bool enableNotifications: setting("enableNotifications", true) === true
 
   // ── Limites duros sobre lo que aceptamos del helper ──────────────────────
   // El helper es de confianza, pero un proceso de confianza que se cuelga o
@@ -117,7 +115,6 @@ Item {
   // Sin PATH ambiental: se prueban rutas absolutas conocidas, en orden, y se
   // recuerda la que funciono. Un directorio escribible antes que /usr/bin en
   // el PATH del usuario no puede secuestrar al detector.
-  readonly property string homeDir: Quickshell.env("HOME") || ""
 
   property string resolvedHelper: ""
 
@@ -155,6 +152,7 @@ Item {
   }
 
   property bool agentValidated: false
+  property bool warnedMissing: false
 
   Process {
     id: validateProcess
@@ -164,12 +162,16 @@ Item {
     onExited: {
       if (String(validateOut.text || "").trim() === root.detectHelper) {
         root.resolvedHelper = root.detectHelper
+        root.warnedMissing = false
         console.warn("omarchy-sec: detector validado en", root.detectHelper)
         root.refresh()
       } else {
-        console.warn("omarchy-sec:", root.detectHelper,
-                     "no pasa la validacion (regular, de root, no escribible por otros);",
-                     "estado desconocido")
+        if (!root.warnedMissing) {
+          root.warnedMissing = true
+          console.warn("omarchy-sec:", root.detectHelper,
+                       "no pasa la validacion (regular, de root, no escribible por otros);",
+                       "estado desconocido. Se reintenta en cada ciclo.")
+        }
         root.markUnknown()
       }
       // El binario del agente se valida aparte: es otro ejecutable y heredar la
@@ -186,7 +188,7 @@ Item {
     stdout: StdioCollector { id: agentOut; waitForEnd: true }
     onExited: {
       root.agentValidated = (String(agentOut.text || "").trim() === root.agentHelper)
-      if (!root.agentValidated)
+      if (!root.agentValidated && !root.warnedMissing)
         console.warn("omarchy-sec:", root.agentHelper,
                      "no pasa la validacion; 'Call Agent' queda deshabilitado")
     }
@@ -222,7 +224,7 @@ Item {
     //              se leeria como exito
     root.scopeUnit = "omarchy-sec-detect-" + Date.now() + "-" +
                      Math.floor(Math.random() * 100000)
-    var quoted = "'" + String(root.resolvedHelper).replace(/'/g, "'\''") + "'"
+    var quoted = "'" + String(root.resolvedHelper).replace(/'/g, "'\\''") + "'"
     detectProcess.command = [
       "/usr/bin/systemd-run", "--user", "--scope", "--collect", "--quiet",
       "--unit", root.scopeUnit,
@@ -279,6 +281,17 @@ Item {
 
     var count = Number(data.activeCount)
     if (!isFinite(count) || count < 0 || count > 99) count = 0
+    count = Math.floor(count)
+
+    // El color sale de `status` y el texto de `activeCount`. Si el helper los
+    // manda incoherentes, el widget diria "2 activos · Protegido" en rojo. Hoy
+    // el helper los sincroniza por construccion, pero esa invariante la sostiene
+    // un script de bash y este validador dice ser la frontera de confianza.
+    if ((data.status === "protected") !== (count > 0)) {
+      console.warn("omarchy-sec: el detector devolvio status/activeCount",
+                   "incoherentes (", data.status, "/", count, "); estado desconocido")
+      return false
+    }
 
     var type = root.knownTypes.indexOf(String(data.primaryType)) >= 0
              ? String(data.primaryType) : "none"
@@ -312,9 +325,8 @@ Item {
     root.isProtected = nowProtected
     root.primarySensor = root.cleanString(data.primary, "Omarchy Sec")
     root.primaryType = type
-    root.activeSensorCount = Math.floor(count)
+    root.activeSensorCount = count
     root.sensorsData = sensors
-    root.lastCheck = Qt.formatTime(new Date(), "hh:mm:ss")
     return true
   }
 
@@ -376,12 +388,23 @@ Item {
     }
   }
 
+  // Mientras no haya helper validado se reintenta la validacion en cada ciclo.
+  // Antes se validaba una sola vez al construir el componente: si el paquete no
+  // estaba instalado en ese instante el widget quedaba muerto para siempre, y
+  // ese es el orden en que lo hace todo el mundo — instalar el plugin desde el
+  // marketplace primero y el paquete despues.
   Timer {
     id: pollTimer
     interval: root.refreshIntervalSec * 1000
     repeat: true
     running: true
     triggeredOnStart: true
-    onTriggered: root.refresh()
+    onTriggered: {
+      if (root.resolvedHelper === "") {
+        if (!validateProcess.running && !validateAgent.running) root.validateCandidate()
+        return
+      }
+      root.refresh()
+    }
   }
 }
