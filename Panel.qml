@@ -107,7 +107,7 @@ Panel {
         Rectangle {
           width: parent.width
           implicitHeight: sensorCol.implicitHeight + Style.space(16)
-          radius: Style.radius(8)
+          radius: Style.cornerRadius
           color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.06)
           border.color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.12)
           border.width: 1
@@ -130,7 +130,7 @@ Panel {
             Rectangle {
               width: parent.width
               height: Style.space(26)
-              radius: Style.radius(4)
+              radius: Style.cornerRadius
               color: root.selectedSensor === "wazuh" ? Qt.rgba(root.successColor.r, root.successColor.g, root.successColor.b, 0.15) : (rowWazuhArea.containsMouse ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.08) : "transparent")
               border.color: root.selectedSensor === "wazuh" ? root.successColor : "transparent"
               border.width: 1
@@ -173,7 +173,7 @@ Panel {
             Rectangle {
               width: parent.width
               height: Style.space(26)
-              radius: Style.radius(4)
+              radius: Style.cornerRadius
               color: root.selectedSensor === "crowdstrike" ? Qt.rgba(root.successColor.r, root.successColor.g, root.successColor.b, 0.15) : (rowFalconArea.containsMouse ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.08) : "transparent")
               border.color: root.selectedSensor === "crowdstrike" ? root.successColor : "transparent"
               border.width: 1
@@ -216,7 +216,7 @@ Panel {
             Rectangle {
               width: parent.width
               height: Style.space(26)
-              radius: Style.radius(4)
+              radius: Style.cornerRadius
               color: root.selectedSensor === "cortex" ? Qt.rgba(root.successColor.r, root.successColor.g, root.successColor.b, 0.15) : (rowCortexArea.containsMouse ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.08) : "transparent")
               border.color: root.selectedSensor === "cortex" ? root.successColor : "transparent"
               border.width: 1
@@ -259,7 +259,7 @@ Panel {
             Rectangle {
               width: parent.width
               height: Style.space(26)
-              radius: Style.radius(4)
+              radius: Style.cornerRadius
               color: root.selectedSensor === "defender" ? Qt.rgba(root.successColor.r, root.successColor.g, root.successColor.b, 0.15) : (rowDefArea.containsMouse ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.08) : "transparent")
               border.color: root.selectedSensor === "defender" ? root.successColor : "transparent"
               border.width: 1
@@ -304,7 +304,7 @@ Panel {
         Rectangle {
           width: parent.width
           height: Style.space(36)
-          radius: Style.radius(6)
+          radius: Style.cornerRadius
           color: btnDashArea.containsMouse ? Qt.rgba(root.statusColor.r, root.statusColor.g, root.statusColor.b, 0.2) : Qt.rgba(root.statusColor.r, root.statusColor.g, root.statusColor.b, 0.12)
           border.color: root.statusColor
           border.width: 1
@@ -356,7 +356,7 @@ Panel {
           Rectangle {
             width: (parent.width - Style.space(8)) / 2
             height: Style.space(30)
-            radius: Style.radius(6)
+            radius: Style.cornerRadius
             color: btnRefreshArea.containsMouse ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.1) : "transparent"
             border.color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.2)
             border.width: 1
@@ -380,7 +380,7 @@ Panel {
           Rectangle {
             width: (parent.width - Style.space(8)) / 2
             height: Style.space(30)
-            radius: Style.radius(6)
+            radius: Style.cornerRadius
             color: btnAgentArea.containsMouse ? Qt.rgba(root.warningColor.r, root.warningColor.g, root.warningColor.b, 0.2) : Qt.rgba(root.warningColor.r, root.warningColor.g, root.warningColor.b, 0.08)
             border.color: Qt.rgba(root.warningColor.r, root.warningColor.g, root.warningColor.b, 0.5)
             border.width: 1
