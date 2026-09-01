@@ -28,9 +28,15 @@ Item {
     return "Desprotegido (Sin EDR Activo)"
   }
 
+  // Verde/rojo acá son semantica, no decoracion: en un indicador de seguridad el
+  // color ES el mensaje. La paleta de Omarchy no tiene token de "success", asi que
+  // el verde va fijo — igual que successColor en Panel.qml. El estado desconocido y
+  // el desprotegido si usan tokens del tema (muted / urgent).
+  readonly property color protectedColor: "#22c55e"
+
   readonly property color statusColor: {
     if (!root.detectorAvailable) return Color.muted
-    if (root.isProtected) return Color.accent
+    if (root.isProtected) return root.protectedColor
     return Color.urgent
   }
 
